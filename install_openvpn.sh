@@ -41,60 +41,20 @@ sudo systemctl enable openvpn@server
 cd ~/openvpn-ca
 ./build-key --batch client1
 
+
 # Lấy địa chỉ IP công cộng của VPS
 SERVER_IP=$(curl -s ifconfig.me)
-
-# Xuất tệp client.ovpn với mật khẩu mặc định
-cat <<EOF > ~/client.ovpn
-client
-dev tun
-proto udp
-remote $SERVER_IP 1194
-resolv-retry infinite
-nobind
-persist-key
-persist-tun
-remote-cert-tls server
-auth SHA256
-cipher AES-256-CBC
-verb 3
-auth-user-pass
-<auth-user-pass>
-client
-honglee@vpn
-</auth-user-pass>
-
-<ca>
-$(cat keys/ca.crt)
-</ca>
-<cert>
-$(cat keys/client1.crt)
-</cert>
-<key>
-$(cat keys/client1.key)
-</key>
-<tls-auth>
-$(cat keys/ta.key)
-</tls-auth>
-EOF
-
 
 # Nén file client.ovpn
 zip -P honglee@vpn ~/client.zip ~/client.ovpn
 
-# Tải file lên bashupload.com và lưu link
-UPLOAD_LINK=$(curl -s https://bashupload.com/client.zip --data-binary @~/client.zip)
-
-# Trích xuất link tải từ kết quả
-DOWNLOAD_LINK=$(echo "$UPLOAD_LINK" | grep -oP 'https://bashupload.com/[^"]+')
-
-# Nếu không tải lên được, tạo link tải trực tiếp
-if [ -z "$DOWNLOAD_LINK" ]; then
-    DOWNLOAD_LINK="scp user@$(curl -s ifconfig.me):~/client.zip ."
-fi
+# Tạo link tải trực tiếp sử dụng IP của VPS
+DOWNLOAD_LINK="scp ubuntu@$SERVER_IP:~/client.zip ."
 
 echo "OpenVPN đã được cài đặt và cấu hình thành công."
 echo "File client.ovpn đã được tạo với mật khẩu mặc định: honglee@vpn"
 echo "Link tải file client.zip: $DOWNLOAD_LINK"
 echo "Mật khẩu để giải nén file: honglee@vpn"
+echo "Lưu ý: Thay 'ubuntu' bằng tên người dùng thực tế của bạn trên VPS."
+
 
