@@ -9,11 +9,11 @@ else
 fi
 
 # Kiểm tra và tạo thư mục openvpn-ca nếu chưa tồn tại
-if [ ! -d "$HOME/openvpn-ca" ]; then
-    make-cadir ~/openvpn-ca
+if [ ! -d "/root/openvpn-ca" ]; then
+    make-cadir /root/openvpn-ca
 fi
 
-cd ~/openvpn-ca
+cd /root/openvpn-ca
 
 # Kiểm tra và tạo lại các file chứng chỉ và khóa nếu chúng không tồn tại
 if [ ! -f "keys/ca.crt" ] || [ ! -f "keys/server.crt" ] || [ ! -f "keys/server.key" ] || [ ! -f "keys/dh2048.pem" ]; then
@@ -55,6 +55,8 @@ sudo systemctl start openvpn@server
 if ! sudo systemctl is-active --quiet openvpn@server; then
     echo "Không thể khởi động dịch vụ OpenVPN. Kiểm tra log để biết thêm chi tiết:"
     sudo journalctl -xe --no-pager | tail -n 50
+    echo "Trạng thái dịch vụ OpenVPN:"
+    sudo systemctl status openvpn@server
 else
     echo "Dịch vụ OpenVPN đã được khởi động thành công."
 fi
@@ -67,7 +69,7 @@ fi
 
 # Xuất tệp client.ovpn với mật khẩu mặc định
 SERVER_IP=$(curl -s ifconfig.me)
-cat <<EOF > ~/client.ovpn
+cat <<EOF > /root/client.ovpn
 client
 dev tun
 proto udp
@@ -98,13 +100,13 @@ $(cat keys/client1.key)
 EOF
 
 # Nén file client.ovpn
-zip -P honglee@vpn ~/client.zip ~/client.ovpn
+zip -P honglee@vpn /root/client.zip /root/client.ovpn
 
 # Tạo thư mục cho OpenVPN files
 sudo mkdir -p /var/www/html/openvpn
 
 # Di chuyển file client.zip
-sudo mv ~/client.zip /var/www/html/openvpn/
+sudo mv /root/client.zip /var/www/html/openvpn/
 
 # Cấu hình Nginx để phục vụ file
 sudo tee /etc/nginx/sites-available/openvpn <<EOF
