@@ -86,9 +86,7 @@ $(cat ~/openvpn-ca/keys/client1.crt)
 <key>
 $(cat ~/openvpn-ca/keys/client1.key)
 </key>
-<tls-auth>
-$(cat ~/openvpn-ca/keys/ta.key)
-</tls-auth>
+# TLS-Auth key removed
 EOF
 
 # Nén file client.ovpn
