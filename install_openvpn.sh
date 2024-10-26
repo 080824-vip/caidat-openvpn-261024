@@ -1,42 +1,30 @@
 #!/bin/bash
 
-# Kiểm tra và cài đặt OpenVPN nếu chưa có
-if ! command -v openvpn &> /dev/null; then
+# Kiểm tra và cài đặt OpenVPN và Easy-RSA nếu chưa có
+if ! command -v openvpn &> /dev/null || ! command -v easyrsa &> /dev/null; then
     sudo apt update && sudo apt upgrade -y
     sudo apt install openvpn easy-rsa curl zip nginx -y
 else
-    echo "OpenVPN đã được cài đặt."
+    echo "OpenVPN và Easy-RSA đã được cài đặt."
 fi
 
-# Kiểm tra và tạo thư mục openvpn-ca nếu chưa tồn tại
-if [ ! -d "/root/openvpn-ca" ]; then
-    make-cadir /root/openvpn-ca
+# Tạo và cấu hình thư mục Easy-RSA
+EASYRSA_DIR="/etc/openvpn/easy-rsa"
+if [ ! -d "$EASYRSA_DIR" ]; then
+    sudo mkdir -p "$EASYRSA_DIR"
+    sudo cp -r /usr/share/easy-rsa/* "$EASYRSA_DIR"
+    sudo chown -R $USER:$USER "$EASYRSA_DIR"
 fi
 
-cd /root/openvpn-ca
+cd "$EASYRSA_DIR"
 
-# Kiểm tra và tạo lại các file chứng chỉ và khóa nếu chúng không tồn tại
-if [ ! -f "keys/ca.crt" ] || [ ! -f "keys/server.crt" ] || [ ! -f "keys/server.key" ] || [ ! -f "keys/dh2048.pem" ]; then
-    echo "Một hoặc nhiều file chứng chỉ/khóa không tồn tại. Tạo lại..."
-    
-    # Cấu hình biến môi trường
-    cat <<EOF > vars
-export KEY_COUNTRY="VN"
-export KEY_PROVINCE="SG"
-export KEY_CITY="Singapore"
-export KEY_ORG="YourOrg"
-export KEY_EMAIL="youremail@example.com"
-export KEY_OU="YourOU"
-EOF
-
-    # Tạo chứng chỉ CA và khóa server
-    source vars
-    ./clean-all
-    ./build-ca --batch
-    ./build-key-server --batch server
-    ./build-dh
-else
-    echo "Các file chứng chỉ và khóa đã tồn tại."
+# Khởi tạo PKI và tạo chứng chỉ
+if [ ! -f "pki/ca.crt" ]; then
+    ./easyrsa init-pki
+    ./easyrsa build-ca nopass
+    ./easyrsa gen-dh
+    ./easyrsa build-server-full server nopass
+    openvpn --genkey --secret pki/ta.key
 fi
 
 # Cấu hình máy chủ OpenVPN
@@ -46,6 +34,11 @@ if [ ! -f "/etc/openvpn/server.conf" ]; then
     sudo sed -i 's|;push "redirect-gateway def1 bypass-dhcp"|push "redirect-gateway def1 bypass-dhcp"|' /etc/openvpn/server.conf
     sudo sed -i 's|;user nobody|user nobody|' /etc/openvpn/server.conf
     sudo sed -i 's|;group nogroup|group nogroup|' /etc/openvpn/server.conf
+    sudo sed -i "s|dh dh2048.pem|dh $EASYRSA_DIR/pki/dh.pem|" /etc/openvpn/server.conf
+    sudo sed -i "s|ca ca.crt|ca $EASYRSA_DIR/pki/ca.crt|" /etc/openvpn/server.conf
+    sudo sed -i "s|cert server.crt|cert $EASYRSA_DIR/pki/issued/server.crt|" /etc/openvpn/server.conf
+    sudo sed -i "s|key server.key|key $EASYRSA_DIR/pki/private/server.key|" /etc/openvpn/server.conf
+    sudo sed -i "s|tls-auth ta.key 0|tls-auth $EASYRSA_DIR/pki/ta.key 0|" /etc/openvpn/server.conf
 else
     echo "File cấu hình server.conf đã tồn tại."
 fi
@@ -62,10 +55,8 @@ else
 fi
 sudo systemctl enable openvpn@server
 
-# Tạo khóa cho khách hàng nếu chưa tồn tại
-if [ ! -f "keys/client1.key" ]; then
-    ./build-key --batch client1
-fi
+# Tạo khóa cho khách hàng
+./easyrsa build-client-full client1 nopass
 
 # Xuất tệp client.ovpn với mật khẩu mặc định
 SERVER_IP=$(curl -s ifconfig.me)
@@ -89,14 +80,18 @@ honglee@vpn
 </auth-user-pass>
 
 <ca>
-$(cat keys/ca.crt)
+$(cat pki/ca.crt)
 </ca>
 <cert>
-$(cat keys/client1.crt)
+$(cat pki/issued/client1.crt)
 </cert>
 <key>
-$(cat keys/client1.key)
+$(cat pki/private/client1.key)
 </key>
+<tls-auth>
+$(cat pki/ta.key)
+</tls-auth>
+key-direction 1
 EOF
 
 # Nén file client.ovpn
