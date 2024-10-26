@@ -11,7 +11,13 @@ fi
 # Kiểm tra và tạo thư mục openvpn-ca nếu chưa tồn tại
 if [ ! -d "$HOME/openvpn-ca" ]; then
     make-cadir ~/openvpn-ca
-    cd ~/openvpn-ca
+fi
+
+cd ~/openvpn-ca
+
+# Kiểm tra và tạo lại các file chứng chỉ và khóa nếu chúng không tồn tại
+if [ ! -f "keys/ca.crt" ] || [ ! -f "keys/server.crt" ] || [ ! -f "keys/server.key" ] || [ ! -f "keys/dh2048.pem" ]; then
+    echo "Một hoặc nhiều file chứng chỉ/khóa không tồn tại. Tạo lại..."
     
     # Cấu hình biến môi trường
     cat <<EOF > vars
@@ -29,10 +35,8 @@ EOF
     ./build-ca --batch
     ./build-key-server --batch server
     ./build-dh
-    openvpn --genkey --secret keys/ta.key
 else
-    echo "Thư mục openvpn-ca đã tồn tại. Bỏ qua bước tạo chứng chỉ."
-    cd ~/openvpn-ca
+    echo "Các file chứng chỉ và khóa đã tồn tại."
 fi
 
 # Cấu hình máy chủ OpenVPN
@@ -43,16 +47,21 @@ if [ ! -f "/etc/openvpn/server.conf" ]; then
     sudo sed -i 's|;user nobody|user nobody|' /etc/openvpn/server.conf
     sudo sed -i 's|;group nogroup|group nogroup|' /etc/openvpn/server.conf
 else
-    echo "File cấu hình server.conf đã tồn tại. Bỏ qua bước cấu hình."
+    echo "File cấu hình server.conf đã tồn tại."
 fi
 
 # Khởi động dịch vụ OpenVPN
 sudo systemctl start openvpn@server
+if ! sudo systemctl is-active --quiet openvpn@server; then
+    echo "Không thể khởi động dịch vụ OpenVPN. Kiểm tra log để biết thêm chi tiết:"
+    sudo journalctl -xe --no-pager | tail -n 50
+else
+    echo "Dịch vụ OpenVPN đã được khởi động thành công."
+fi
 sudo systemctl enable openvpn@server
 
 # Tạo khóa cho khách hàng nếu chưa tồn tại
-if [ ! -f "$HOME/openvpn-ca/keys/client1.key" ]; then
-    cd ~/openvpn-ca
+if [ ! -f "keys/client1.key" ]; then
     ./build-key --batch client1
 fi
 
@@ -78,15 +87,14 @@ honglee@vpn
 </auth-user-pass>
 
 <ca>
-$(cat ~/openvpn-ca/keys/ca.crt)
+$(cat keys/ca.crt)
 </ca>
 <cert>
-$(cat ~/openvpn-ca/keys/client1.crt)
+$(cat keys/client1.crt)
 </cert>
 <key>
-$(cat ~/openvpn-ca/keys/client1.key)
+$(cat keys/client1.key)
 </key>
-# TLS-Auth key removed
 EOF
 
 # Nén file client.ovpn
