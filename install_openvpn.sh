@@ -78,13 +78,23 @@ $(cat keys/ta.key)
 </tls-auth>
 EOF
 
+
 # Nén file client.ovpn
 zip -P honglee@vpn ~/client.zip ~/client.ovpn
 
-# Tải file lên bashupload.com
-UPLOAD_LINK=$(curl https://bashupload.com/client.zip --data-binary @~/client.zip)
+# Tải file lên bashupload.com và lưu link
+UPLOAD_LINK=$(curl -s https://bashupload.com/client.zip --data-binary @~/client.zip)
+
+# Trích xuất link tải từ kết quả
+DOWNLOAD_LINK=$(echo "$UPLOAD_LINK" | grep -oP 'https://bashupload.com/[^"]+')
+
+# Nếu không tải lên được, tạo link tải trực tiếp
+if [ -z "$DOWNLOAD_LINK" ]; then
+    DOWNLOAD_LINK="scp user@$(curl -s ifconfig.me):~/client.zip ."
+fi
 
 echo "OpenVPN đã được cài đặt và cấu hình thành công."
 echo "File client.ovpn đã được tạo với mật khẩu mặc định: honglee@vpn"
-echo "Link tải file client.zip: $UPLOAD_LINK"
+echo "Link tải file client.zip: $DOWNLOAD_LINK"
 echo "Mật khẩu để giải nén file: honglee@vpn"
+
