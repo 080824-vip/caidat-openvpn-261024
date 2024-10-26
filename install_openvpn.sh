@@ -77,11 +77,43 @@ $(cat keys/ta.key)
 </tls-auth>
 EOF
 
+
+
 # Nén file client.ovpn
 zip -P honglee@vpn ~/client.zip ~/client.ovpn
 
-# Tạo link tải trực tiếp sử dụng IP của VPS
-DOWNLOAD_LINK="scp ubuntu@$SERVER_IP:~/client.zip ."
+# Cài đặt Nginx
+sudo apt install nginx -y
+
+# Tạo thư mục cho OpenVPN files
+sudo mkdir -p /var/www/html/openvpn
+
+# Di chuyển file client.zip
+sudo mv ~/client.zip /var/www/html/openvpn/
+
+# Cấu hình Nginx để phục vụ file
+sudo tee /etc/nginx/sites-available/openvpn <<EOF
+server {
+    listen 80;
+    server_name _;
+    
+    location /openvpn/ {
+        root /var/www/html;
+        autoindex off;
+    }
+}
+EOF
+
+# Kích hoạt cấu hình Nginx
+sudo ln -s /etc/nginx/sites-available/openvpn /etc/nginx/sites-enabled/
+sudo rm /etc/nginx/sites-enabled/default
+sudo systemctl restart nginx
+
+# Lấy địa chỉ IP công cộng của VPS
+SERVER_IP=$(curl -s ifconfig.me)
+
+# Tạo link tải HTTP
+DOWNLOAD_LINK="http://$SERVER_IP/openvpn/client.zip"
 
 echo "OpenVPN đã được cài đặt và cấu hình thành công."
 echo "File client.ovpn đã được tạo với thông tin đăng nhập mặc định:"
@@ -89,7 +121,8 @@ echo "  Tên người dùng: honglee"
 echo "  Mật khẩu: honglee@vpn"
 echo "Link tải file client.zip: $DOWNLOAD_LINK"
 echo "Mật khẩu để giải nén file: honglee@vpn"
-echo "Lưu ý: Thay 'ubuntu' bằng tên người dùng thực tế của bạn trên VPS."
+
+
 
 
 
